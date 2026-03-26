@@ -7,7 +7,7 @@ SRC_DIR = $(PWD)/../src
 VERILOG_SOURCES += $(SRC_DIR)/project.v
 
 # TOPLEVEL is the name of the module in your Verilog file
-TOPLEVEL = tt_um_example
+TOPLEVEL = tt_um_nebula
 
 # MODULE is the name of the Python test file (without .py)
 MODULE = test
