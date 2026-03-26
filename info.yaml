@@ -1,56 +1,52 @@
 # Tiny Tapeout project information
 project:
-  title:        ""      # Project title
-  author:       ""      # Your name
-  discord:      ""      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
-  description:  ""      # One line description of what your project does
-  language:     "Verilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
-  clock_hz:     0       # Clock frequency in Hz (or 0 if not applicable)
+  title:        "Sierpinski Nebula Flight"      # Project title
+  author:       "Vasudev"                    # Your name
+  discord:      ""                             # Your discord username (optional)
+  description:  "A thematic space nebula demoscene with VGA output and PWM audio." 
+  language:     "Verilog" 
+  clock_hz:     25175000                       # Standard VGA clock frequency
 
-  # How many tiles your design occupies? A single tile is about 167x108 uM.
-  tiles: "1x1"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
+  # This design is optimized for a single tile.
+  tiles: "1x1"          
 
-  # Your top module name must start with "tt_um_". Make it unique by including your github username:
+  # This must match the 'module' name in your project.v exactly
   top_module:  "tt_um_example"
 
-  # List your project's source files here.
-  # Source files must be in ./src and you must list each source file separately, one per line.
-  # Don't forget to also update `PROJECT_SOURCES` in test/Makefile.
   source_files:
     - "project.v"
 
-# The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
-# This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
+# The pinout for the datasheet. Descriptive names help people use your chip!
 pinout:
-  # Inputs
-  ui[0]: ""
-  ui[1]: ""
-  ui[2]: ""
-  ui[3]: ""
-  ui[4]: ""
-  ui[5]: ""
-  ui[6]: ""
-  ui[7]: ""
+  # Inputs (ui_in)
+  ui[0]: "Speed bit 0"
+  ui[1]: "Speed bit 1"
+  ui[2]: "Speed bit 2"
+  ui[3]: "Speed bit 3"
+  ui[4]: "Density bit 0"
+  ui[5]: "Density bit 1"
+  ui[6]: "Density bit 2"
+  ui[7]: "Density bit 3"
 
-  # Outputs
-  uo[0]: ""
-  uo[1]: ""
-  uo[2]: ""
-  uo[3]: ""
-  uo[4]: ""
-  uo[5]: ""
-  uo[6]: ""
-  uo[7]: ""
+  # Outputs (uo_out) - Standard Tiny Tapeout VGA PMOD mapping
+  uo[0]: "Red 0 (LSB)"
+  uo[1]: "Green 0 (LSB)"
+  uo[2]: "Blue 0 (LSB)"
+  uo[3]: "HSync (Active Low)"
+  uo[4]: "Red 1 (MSB)"
+  uo[5]: "Green 1 (MSB)"
+  uo[6]: "Blue 1 (MSB)"
+  uo[7]: "VSync (Active Low)"
 
-  # Bidirectional pins
-  uio[0]: ""
-  uio[1]: ""
-  uio[2]: ""
-  uio[3]: ""
-  uio[4]: ""
-  uio[5]: ""
-  uio[6]: ""
-  uio[7]: ""
+  # Bidirectional pins (uio_out)
+  uio[0]: "PWM Audio Output"
+  uio[1]: "unused"
+  uio[2]: "unused"
+  uio[3]: "unused"
+  uio[4]: "unused"
+  uio[5]: "unused"
+  uio[6]: "unused"
+  uio[7]: "unused"
 
 # Do not change!
 yaml_version: 6
