@@ -1,10 +1,10 @@
 `default_nettype none
 
-module tt_um_example (
+module tt_um_nebula_starfield (
     input  wire [7:0] ui_in,    // Inputs: [7:4] Density, [3:0] Flight Speed
-    output wire [7:0] uo_out,   // VGA: RRGGBB, HSync, VSync
+    output wire[7:0] uo_out,   // VGA: RRGGBB, HSync, VSync
     input  wire [7:0] uio_in,   // unused
-    output wire [7:0] uio_out,  // uio_out[0] is PWM Audio
+    output wire [7:0] uio_out,  // uio_out[7] is Audio
     output wire [7:0] uio_oe,   // IO direction control
     input  wire       ena,      // always 1
     input  wire       clk,      // clock (25.175 MHz)
@@ -12,9 +12,10 @@ module tt_um_example (
 );
 
     // ------------------------------------------------------------------------
-    // Setup & Unused Signals
+    // Setup & IO Direction
     // ------------------------------------------------------------------------
-    assign uio_oe = 8'b00000001; // Only uio_out[0] is output (PWM audio)
+    // VGA Playground listens to uio_out[7] for audio. We enable bit 7 as output.
+    assign uio_oe = 8'b10000000; 
     wire _unused = &{1'b0, uio_in, ena};
 
     // ------------------------------------------------------------------------
@@ -24,9 +25,8 @@ module tt_um_example (
     reg [9:0]  v_count;
     reg [15:0] x_offset;
     reg [15:0] y_offset;
-    reg [18:0] voice1, voice2, voice3, voice4;
     reg [7:0]  uo_out_reg;
-    reg [7:0]  uio_out_reg;
+    reg[7:0]  uio_out_reg;
 
     assign uo_out = uo_out_reg;
     assign uio_out = uio_out_reg;
@@ -67,59 +67,56 @@ module tt_um_example (
             x_offset <= 0;
             y_offset <= 0;
         end else if (h_end && v_end) begin
-            // Scroll flight space smoothly once per frame. 
-            // Added '+ 1' so it moves even when ui_in == 0
             x_offset <= x_offset + {12'b0, ui_in[3:0]} + 16'd1;
             y_offset <= y_offset + {13'b0, ui_in[3:1]} + 16'd1; 
         end
     end
 
     // ------------------------------------------------------------------------
-    // Sierpinski Nebula Generation
+    // Sierpinski Nebula + Spatial Starfield
     // ------------------------------------------------------------------------
     wire [11:0] f_x = h_count + x_offset[11:0];
     wire [11:0] f_y = v_count + y_offset[11:0];
     wire [11:0] fractal = f_x & f_y;
 
-    wire[7:0] f_mask_core = {~ui_in[7:6], 2'b11, ~ui_in[5:4], 2'b11};
-    wire[7:0] f_mask_fringe = f_mask_core & 8'b0111_0111; 
+    wire [7:0] f_mask_core = {~ui_in[7:6], 2'b11, ~ui_in[5:4], 2'b11};
+    wire [7:0] f_mask_fringe = f_mask_core & 8'b0111_0111; 
 
     wire nebula_core   = ((fractal[9:2] & f_mask_core) == 0);
     wire nebula_fringe = ((fractal[9:2] & f_mask_fringe) == 0);
 
-    // ------------------------------------------------------------------------
-    // Spatial Hash Starfield
-    // ------------------------------------------------------------------------
     wire [11:0] st_x = h_count + x_offset[12:1]; 
-    wire[11:0] st_y = v_count + y_offset[12:1];
-    wire[11:0] hash_val = (st_x ^ {st_y[5:0], st_y[11:6]}) + st_y;
+    wire [11:0] st_y = v_count + y_offset[12:1];
+    wire [11:0] hash_val = (st_x ^ {st_y[5:0], st_y[11:6]}) + st_y;
     
     wire star_pixel  = (hash_val[11:3] == 9'h1FF); 
     wire twinkle     = hash_val[0] ^ x_offset[4];  
     wire star_active = star_pixel & twinkle;
 
-    // ------------------------------------------------------------------------
-    // Color Palette Mixing
-    // ------------------------------------------------------------------------
     wire [1:0] r_c = star_active ? 2'b11 : (nebula_core ? 2'b11 : (nebula_fringe ? 2'b01 : 2'b00));
-    wire [1:0] g_c = star_active ? 2'b11 : (nebula_core ? 2'b01 : (nebula_fringe ? 2'b00 : 2'b00));
+    wire[1:0] g_c = star_active ? 2'b11 : (nebula_core ? 2'b01 : (nebula_fringe ? 2'b00 : 2'b00));
     wire [1:0] b_c = star_active ? 2'b11 : (nebula_core ? 2'b11 : (nebula_fringe ? 2'b10 : 2'b01));
 
     // ------------------------------------------------------------------------
-    // Audio PWM Square Wave Synthesis (4-voice Chiptune)
+    // 🎵 VGA-Synchronized Chiptune Engine (31.5 kHz Sample Rate)
     // ------------------------------------------------------------------------
+    reg [15:0] phase1, phase2, phase3;
+
     always @(posedge clk) begin
         if (!rst_n) begin
-            voice1 <= 0; voice2 <= 0; voice3 <= 0; voice4 <= 0;
-        end else begin
-            voice1 <= voice1 + 19'd5  + {15'b0, x_offset[11:8]};
-            voice2 <= voice2 + 19'd7  + {15'b0, x_offset[12:9]};
-            voice3 <= voice3 + 19'd10 + {15'b0, x_offset[13:10]};
-            voice4 <= voice4 + 19'd12 + {15'b0, x_offset[10:7]};
+            phase1 <= 0; phase2 <= 0; phase3 <= 0;
+        end else if (h_end) begin 
+            // This block executes exactly once per horizontal line (31,468 Hz)
+            // By wrapping 16-bit accumulators at this speed, we generate pure audible tones.
+            // The frequencies dynamically modulate based on the flight speed offset!
+            phase1 <= phase1 + 16'd300 + {8'b0, x_offset[10:3]}; // Base ~144 Hz
+            phase2 <= phase2 + 16'd450 + {8'b0, x_offset[11:4]}; // Base ~216 Hz
+            phase3 <= phase3 + 16'd600 + {8'b0, y_offset[10:3]}; // Base ~288 Hz
         end
     end
     
-    wire audio_mix = voice1[18] ^ voice2[18] ^ (voice3[18] & voice4[18]);
+    // Digital square wave mixing (Space-engine drone chord)
+    wire sound = (phase1[15] & phase2[15]) ^ phase3[15];
 
     // ------------------------------------------------------------------------
     // Output Registration
@@ -129,30 +126,22 @@ module tt_um_example (
             uo_out_reg  <= 8'b00000000;
             uio_out_reg <= 8'b00000000;
         end else begin
-            // CORRECTED TT VGA PMOD Mapping
-            // [0]=R1(MSB), [4]=R0(LSB) | [1]=G1, [5]=G0 | [2]=B1,[6]=B0
             if (display_en) begin
-                uo_out_reg[0] <= r_c[1]; 
-                uo_out_reg[4] <= r_c[0]; 
-                uo_out_reg[1] <= g_c[1]; 
-                uo_out_reg[5] <= g_c[0]; 
-                uo_out_reg[2] <= b_c[1]; 
-                uo_out_reg[6] <= b_c[0]; 
+                uo_out_reg[0] <= r_c[1]; uo_out_reg[4] <= r_c[0]; 
+                uo_out_reg[1] <= g_c[1]; uo_out_reg[5] <= g_c[0]; 
+                uo_out_reg[2] <= b_c[1]; uo_out_reg[6] <= b_c[0]; 
             end else begin
-                uo_out_reg[0] <= 1'b0;
-                uo_out_reg[4] <= 1'b0;
-                uo_out_reg[1] <= 1'b0;
-                uo_out_reg[5] <= 1'b0;
-                uo_out_reg[2] <= 1'b0;
-                uo_out_reg[6] <= 1'b0;
+                uo_out_reg[0] <= 1'b0; uo_out_reg[4] <= 1'b0;
+                uo_out_reg[1] <= 1'b0; uo_out_reg[5] <= 1'b0;
+                uo_out_reg[2] <= 1'b0; uo_out_reg[6] <= 1'b0;
             end
             
-            uo_out_reg[7] <= h_sync; // Correct TT HSYNC Mapping
-            uo_out_reg[3] <= v_sync; // Correct TT VSYNC Mapping
+            uo_out_reg[7] <= h_sync; 
+            uo_out_reg[3] <= v_sync; 
 
-            // Audio Output
-            uio_out_reg[0]   <= audio_mix;
-            uio_out_reg[7:1] <= 7'b0000000;
+            // Audio output correctly routed to Bit 7 for the Web Simulator
+            uio_out_reg[7]   <= sound;
+            uio_out_reg[6:0] <= 7'b0000000;
         end
     end
 
