@@ -46,14 +46,21 @@ async def test_starfield_vga_audio(dut):
     # Audio waves are slow. We scan up to 100,000 cycles to guarantee we catch a toggle.
     # Checking every 100 cycles avoids slowing down the Python simulation.
     dut._log.info("Testing Audio PWM Activity (Scanning up to 100,000 cycles)...")
-    last_audio_val = int(dut.uio_out.value) & 0x01
-    audio_toggled = False
+    audio_toggled = False 
     
+    # We grab the current state of the pin to compare against later.
+    last_audio_val = int(dut.uio_out.value) & 0x80 
+    
+    # --- STEP B: The Observation Loop ---
     for i in range(1000):
-        await ClockCycles(dut.clk, 100)
-        current_audio_val = int(dut.uio_out.value) & 0x01
+        await ClockCycles(dut.clk, 100) # Wait a bit
+        current_audio_val = int(dut.uio_out.value) & 0x80
         
+        # If the value changed, the hardware is alive!
         if current_audio_val != last_audio_val:
-            audio_toggled = True
-            dut._log.info(f"Audio toggled successfully after roughly {i * 100} cycles!")
-            break
+            audio_toggled = True  # FLIP THE FLAG TO TRUE
+            break                # Stop searching, we have our proof!
+    
+    # --- STEP C: The Final Verdict ---
+    # If audio_toggled is still False, the assertion triggers a "FAIL"
+    assert audio_toggled, "Audio output is dead (not toggling)!"
