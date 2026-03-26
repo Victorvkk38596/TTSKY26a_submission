@@ -2,10 +2,10 @@
 
 module tt_um_nebula (
     input  wire [7:0] ui_in,    // Inputs: [7:4] Density, [3:0] Flight Speed
-    output wire[7:0] uo_out,   // VGA: RRGGBB, HSync, VSync
+    output wire [7:0] uo_out,   // VGA: RRGGBB, HSync, VSync
     input  wire [7:0] uio_in,   // unused
-    output wire [7:0] uio_out,  // uio_out[7] is Audio
-    output wire [7:0] uio_oe,   // IO direction control
+    output wire[7:0] uio_out,  // uio_out[7] is Audio
+    output wire[7:0] uio_oe,   // IO direction control
     input  wire       ena,      // always 1
     input  wire       clk,      // clock (25.175 MHz)
     input  wire       rst_n     // reset_n - low to reset
@@ -14,8 +14,7 @@ module tt_um_nebula (
     // ------------------------------------------------------------------------
     // Setup & IO Direction
     // ------------------------------------------------------------------------
-    // VGA Playground listens to uio_out[7] for audio. We enable bit 7 as output.
-    assign uio_oe = 8'b10000000; 
+    assign uio_oe = 8'b10000000; // uio_out[7] output for Web Simulator audio
     wire _unused = &{1'b0, uio_in, ena};
 
     // ------------------------------------------------------------------------
@@ -26,7 +25,7 @@ module tt_um_nebula (
     reg [15:0] x_offset;
     reg [15:0] y_offset;
     reg [7:0]  uo_out_reg;
-    reg[7:0]  uio_out_reg;
+    reg [7:0]  uio_out_reg;
 
     assign uo_out = uo_out_reg;
     assign uio_out = uio_out_reg;
@@ -94,29 +93,60 @@ module tt_um_nebula (
     wire star_active = star_pixel & twinkle;
 
     wire [1:0] r_c = star_active ? 2'b11 : (nebula_core ? 2'b11 : (nebula_fringe ? 2'b01 : 2'b00));
-    wire[1:0] g_c = star_active ? 2'b11 : (nebula_core ? 2'b01 : (nebula_fringe ? 2'b00 : 2'b00));
+    wire [1:0] g_c = star_active ? 2'b11 : (nebula_core ? 2'b01 : (nebula_fringe ? 2'b00 : 2'b00));
     wire [1:0] b_c = star_active ? 2'b11 : (nebula_core ? 2'b11 : (nebula_fringe ? 2'b10 : 2'b01));
 
     // ------------------------------------------------------------------------
-    // 🎵 VGA-Synchronized Chiptune Engine (31.5 kHz Sample Rate)
+    // 🎵 Synthwave Quantized Arpeggiator (C Minor Pentatonic)
     // ------------------------------------------------------------------------
-    reg [15:0] phase1, phase2, phase3;
+    reg [15:0] arp_phase;
+    reg[15:0] bass_phase;
 
+    // 1. Sequencer Lookups: Tie the notes to the visual flight offset
+    wire [2:0] arp_step = x_offset[8:6]; // Arpeggio runs fast
+    reg [10:0] arp_inc;
+    always @(*) begin
+        case (arp_step)
+            3'b000: arp_inc = 11'd544;  // C4
+            3'b001: arp_inc = 11'd648;  // D#4
+            3'b010: arp_inc = 11'd816;  // G4
+            3'b011: arp_inc = 11'd1089; // C5
+            3'b100: arp_inc = 11'd1295; // D#5
+            3'b101: arp_inc = 11'd1089; // C5
+            3'b110: arp_inc = 11'd816;  // G4
+            3'b111: arp_inc = 11'd648;  // D#4
+        endcase
+    end
+
+    wire [1:0] bass_step = x_offset[11:10]; // Bass runs 8x slower
+    reg [7:0] bass_inc;
+    always @(*) begin
+        case (bass_step)
+            2'b00: bass_inc = 8'd136; // C2
+            2'b01: bass_inc = 8'd136; // C2 (Hold)
+            2'b10: bass_inc = 8'd181; // F2
+            2'b11: bass_inc = 8'd204; // G2
+        endcase
+    end
+
+    // 2. Audio Clocking (31.468 kHz Web Simulator Sample Rate)
     always @(posedge clk) begin
         if (!rst_n) begin
-            phase1 <= 0; phase2 <= 0; phase3 <= 0;
+            arp_phase <= 0;
+            bass_phase <= 0;
         end else if (h_end) begin 
-            // This block executes exactly once per horizontal line (31,468 Hz)
-            // By wrapping 16-bit accumulators at this speed, we generate pure audible tones.
-            // The frequencies dynamically modulate based on the flight speed offset!
-            phase1 <= phase1 + 16'd300 + {8'b0, x_offset[10:3]}; // Base ~144 Hz
-            phase2 <= phase2 + 16'd450 + {8'b0, x_offset[11:4]}; // Base ~216 Hz
-            phase3 <= phase3 + 16'd600 + {8'b0, y_offset[10:3]}; // Base ~288 Hz
+            arp_phase  <= arp_phase  + {5'b0, arp_inc};
+            bass_phase <= bass_phase + {8'b0, bass_inc};
         end
     end
     
-    // Digital square wave mixing (Space-engine drone chord)
-    wire sound = (phase1[15] & phase2[15]) ^ phase3[15];
+    // 3. Rhythmic Gating / Envelopes (Creates the Staccato Synth Effect)
+    // Using upper bits of offset to rhythmically mute the square waves 25% of the time.
+    wire arp_gate  = (x_offset[5:4] != 2'b11); 
+    wire bass_gate = (x_offset[9:8] != 2'b11); 
+
+    // 4. Pure Logic Mix (OR creates a thick 2-oscillator synthesizer chord without static)
+    wire sound = (arp_phase[15] & arp_gate) | (bass_phase[15] & bass_gate);
 
     // ------------------------------------------------------------------------
     // Output Registration
@@ -139,7 +169,7 @@ module tt_um_nebula (
             uo_out_reg[7] <= h_sync; 
             uo_out_reg[3] <= v_sync; 
 
-            // Audio output correctly routed to Bit 7 for the Web Simulator
+            // Audio output on Bit 7
             uio_out_reg[7]   <= sound;
             uio_out_reg[6:0] <= 7'b0000000;
         end
