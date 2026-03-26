@@ -9,7 +9,7 @@ project:
   tiles: "1x1"          
 
   # This MUST match the module name in project.v
-  top_module:  "tt_um_nebula_starfield"
+  top_module:  "tt_um_example"
 
   source_files:
     - "project.v"
