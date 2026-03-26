@@ -1,6 +1,6 @@
 `default_nettype none
 
-module tt_um_example (
+module tt_um_nebula (
     input  wire [7:0] ui_in,    // Inputs: [7:4] Density, [3:0] Flight Speed
     output wire[7:0] uo_out,   // VGA: RRGGBB, HSync, VSync
     input  wire [7:0] uio_in,   // unused
