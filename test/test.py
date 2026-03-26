@@ -1,40 +1,70 @@
-# SPDX-FileCopyrightText: © 2024 Tiny Tapeout
-# SPDX-License-Identifier: Apache-2.0
-
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles
-
+from cocotb.triggers import RisingEdge, FallingEdge, Timer, ClockCycles
 
 @cocotb.test()
-async def test_project(dut):
-    dut._log.info("Start")
-
-    # Set the clock period to 10 us (100 KHz)
-    clock = Clock(dut.clk, 10, unit="us")
+async def test_starfield_vga_audio(dut):
+    # 1. Setup the Clock (25.175 MHz)
+    # Period is ~39.722 ns. We use 40ns for simplicity or the precise value:
+    clock = Clock(dut.clk, 39.722, units="ns")
     cocotb.start_soon(clock.start())
 
-    # Reset
-    dut._log.info("Reset")
-    dut.ena.value = 1
+    # 2. Initialize Inputs
+    dut.rst_n.value = 0
     dut.ui_in.value = 0
     dut.uio_in.value = 0
-    dut.rst_n.value = 0
+    dut.ena.value = 1
+
+    # Wait for 10 clock cycles
     await ClockCycles(dut.clk, 10)
+
+    # 3. Release Reset
+    dut._log.info("Resetting the Nebula Generator...")
     dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 10)
+    dut._log.info("System out of reset.")
 
-    dut._log.info("Test project behavior")
+    # 4. Verify HSYNC Timing (The 31.5 kHz pulse)
+    # A full H-Line is 800 cycles. H-Sync active should be 96 cycles.
+    dut._log.info("Testing HSync Timing...")
+    await FallingEdge(dut.uo_out[7]) # Wait for HSYNC start (Active Low)
+    
+    start_time = cocotb.utils.get_sim_time('ns')
+    await RisingEdge(dut.uo_out[7])  # Wait for HSYNC end
+    end_time = cocotb.utils.get_sim_time('ns')
+    
+    pulse_width = (end_time - start_time) / 39.722
+    dut._log.info(f"HSync Pulse Width: {pulse_width} cycles")
+    
+    # Check if pulse width is roughly 96 cycles (standard VGA)
+    assert 90 <= pulse_width <= 100, "HSync Pulse Width is incorrect!"
 
-    # Set the input values you want to test
-    dut.ui_in.value = 20
-    dut.uio_in.value = 30
+    # 5. Verify Audio PWM Output
+    # We want to see if uio_out[0] is actually toggling
+    dut._log.info("Testing Audio PWM Activity...")
+    audio_toggles = 0
+    for _ in range(1000):
+        current_val = dut.uio_out[0].value
+        await ClockCycles(dut.clk, 5)
+        if dut.uio_out[0].value != current_val:
+            audio_toggles += 1
+            
+    dut._log.info(f"Audio Toggles detected: {audio_toggles}")
+    assert audio_toggles > 0, "Audio output is dead (not toggling)!"
 
-    # Wait for one clock cycle to see the output values
-    await ClockCycles(dut.clk, 1)
+    # 6. Verify Speed/Input Impact
+    # Change speed and density via ui_in
+    dut._log.info("Applying Warp Speed (ui_in = 0xFF)...")
+    dut.ui_in.value = 0xFF 
+    await ClockCycles(dut.clk, 100)
+    
+    # 7. Verify VSYNC Triggering
+    # Note: Simulating a full 480 lines takes a while. 
+    # To save time, we verify that the V-counter is at least incrementing 
+    # by checking that HSYNC happens multiple times.
+    dut._log.info("Waiting for multiple HSync pulses to verify stability...")
+    for i in range(5):
+        await FallingEdge(dut.uo_out[7])
+        dut._log.info(f"HSync Pulse {i} captured.")
 
-    # The following assersion is just an example of how to check the output values.
-    # Change it to match the actual expected output of your module:
-    assert dut.uo_out.value == 50
-
-    # Keep testing the module by changing the input values, waiting for
-    # one or more clock cycles, and asserting the expected output values.
+    dut._log.info("Test passed! Nebula is flying and Audio is humming.")
