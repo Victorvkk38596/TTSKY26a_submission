@@ -1,6 +1,6 @@
 project:
   title:        "Sierpinski Fractal Starfield"
-  author:       "Your Name"
+  author:       "Vasudev Krishna Kottra Chal"
   discord:      "YourDiscord#1234"
   description:  "A deep-space nebula effect using Sierpinski logic with 4-voice PWM chiptune audio."
   language:     "Verilog"
@@ -9,7 +9,7 @@ project:
   tiles: "1x1"          
 
   # This MUST match the module name in project.v
-  top_module:  "tt_um_example"
+  top_module:  "tt_um_nebula"
 
   source_files:
     - "project.v"
